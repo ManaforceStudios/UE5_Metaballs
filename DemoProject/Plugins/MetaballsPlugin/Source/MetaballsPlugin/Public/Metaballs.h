@@ -15,16 +15,18 @@
 // See "License.md" for full licensing details.
 
 #pragma once
-#include "MetaballsPluginPrivatePCH.h"
+#include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
 #include "ProceduralMeshComponent.h"
-#include "Components/SceneComponent.h"
+#include "Components/BoxComponent.h"
+#include "Materials/MaterialInterface.h"
+#include "Components/BillboardComponent.h"
 #include "Metaballs.generated.h"
 
 
 
 
-
+DECLARE_STATS_GROUP(TEXT("MetaBall"), STATGROUP_MetaBall, STATCAT_Advanced);
 DECLARE_LOG_CATEGORY_EXTERN(YourLog, Log, All);
 
 struct SMetaBall
@@ -71,35 +73,35 @@ public:
 	virtual void Tick( float DeltaSeconds ) override;
 
 #if WITH_EDITOR
-	virtual void PostEditChangeProperty(struct FPropertyChangedEvent& e) override;
+	virtual void PostEditChangeProperty(FPropertyChangedEvent& e) override;
 #endif
 
 	UFUNCTION(BlueprintCallable, Category = "Metaballs")
-	void SetBallTransform(int32 index, FVector transfrom);
+	void SetBallTransform(int32 Index, FVector Transform);
 
 	UFUNCTION(BlueprintCallable, Category = "Metaballs")
-	void SetNumBalls(int32 value);
+	void SetNumBalls(int32 Value);
 
 	UFUNCTION(BlueprintCallable, Category = "Metaballs")
-	void SetScale(float value);
+	void SetScale(float Value);
 
 	UFUNCTION(BlueprintCallable, Category = "Metaballs")
-	void SetGridSteps(int32 value);
+	void SetGridSteps(int32 Value);
 
 	UFUNCTION(BlueprintCallable, Category = "Metaballs")
-	void SetRandomSeed(bool seed);
+	void SetRandomSeed(bool bSeed);
 
 	UFUNCTION(BlueprintCallable, Category = "Metaballs")
-	void SetAutoMode(bool mode);
+	void SetAutoMode(bool bMode);
 
 	UFUNCTION(BlueprintCallable, Category = "Metaballs")
-	void SetAutoLimitX(float limit);
+	void SetAutoLimitX(float Limit);
 
 	UFUNCTION(BlueprintCallable, Category = "Metaballs")
-	void SetAutoLimitY(float limit);
+	void SetAutoLimitY(float Limit);
 
 	UFUNCTION(BlueprintCallable, Category = "Metaballs")
-	void SetAutoLimitZ(float limit);
+	void SetAutoLimitZ(float Limit);
 
 	/*Number of metaballs (0 - disable)*/
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Settings, meta = (DisplayName = "Number of balls"))
@@ -137,7 +139,7 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Settings, meta = (DisplayName = "Material"))
 	UMaterialInterface* m_Material;
 
-	UPROPERTY()
+	UPROPERTY(VisibleDefaultsOnly)
 	UBoxComponent* MetaBallsBoundBox;
 
 //	UPROPERTY(VisibleAnywhere, Category = "MyComponents")
@@ -154,30 +156,32 @@ public:
 protected:
 
 	void InitBalls();
-	float CheckLimit(float value);
+	float CheckLimit(float Value) const;
 
-	float ComputeEnergy(float x, float y, float z);
-	void  ComputeNormal(FVector vertex);
+	float ComputeEnergy(float x, float y, float z) const;
+	void  ComputeNormal(FVector Vertex);
 
-	float ComputeGridPointEnergy(int x, int y, int z);
+	float ComputeGridPointEnergy(int x, int y, int z) const;
 	int   ComputeGridVoxel(int x, int y, int z);
 
-	bool  IsGridPointComputed(int x, int y, int z);
-	bool  IsGridVoxelComputed(int x, int y, int z);
-	bool  IsGridVoxelInList(int x, int y, int z);
-	void  SetGridPointComputed(int x, int y, int z);
-	void  SetGridVoxelComputed(int x, int y, int z);
-	void  SetGridVoxelInList(int x, int y, int z);
+	bool  IsGridPointComputed(int x, int y, int z) const;
+	bool  IsGridVoxelComputed(int x, int y, int z) const;
+	bool  IsGridVoxelInList(int x, int y, int z) const;
+	void  SetGridPointComputed(int x, int y, int z) const;
+	void  SetGridVoxelComputed(int x, int y, int z) const;
+	void  SetGridVoxelInList(int x, int y, int z) const;
 
-	float ConvertGridPointToWorldCoordinate(int x);
-	int   ConvertWorldCoordinateToGridPoint(float x);
+	float ConvertGridPointToWorldCoordinate(int x) const;
+	FVector ConvertGridPointToWorldCoordinate(const FVector& Vector) const;
+	int   ConvertWorldCoordinateToGridPoint(float x) const;
 	void  AddNeighborsToList(int nCase, int x, int y, int z);
 	void  AddNeighbor(int x, int y, int z);
 
 	float  m_fLevel;
 
 
-	SMetaBall  m_Balls[AMetaballs::MAX_METABALLS];
+	SMetaBall  m_Balls[MAX_METABALLS];
+	//TArray<SMetaBall> m_Balls;
 
 	int		m_nNumOpenVoxels;
 	int		m_nMaxOpenVoxels;
@@ -193,7 +197,7 @@ protected:
 	int		m_nNumVertices;
 	int		m_nNumIndices;
 
-
+	UPROPERTY(VisibleDefaultsOnly)
 	UProceduralMeshComponent* m_mesh;
 
 	TArray<FVector> m_vertices;
@@ -203,8 +207,7 @@ protected:
 	TArray<FVector2D> m_UV0;
 	TArray<FColor> m_vertexColors;
 
-
-
 	TArray<FProcMeshTangent> m_tangents;
 
 };
+
