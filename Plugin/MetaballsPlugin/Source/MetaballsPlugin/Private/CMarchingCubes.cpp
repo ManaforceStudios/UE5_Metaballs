@@ -1,5 +1,4 @@
 
-#include "MetaballsPluginPrivatePCH.h"
 #include "CMarchingCubes.h"
 
 CMarchingCubes::CMarchingCubes()

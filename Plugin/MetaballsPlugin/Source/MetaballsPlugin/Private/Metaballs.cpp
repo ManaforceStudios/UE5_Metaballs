@@ -16,13 +16,47 @@
 // Selling this as a plugin/item, in whole or part, is not allowed.
 // See "License.md" for full licensing details.
 
-
-#include "MetaballsPluginPrivatePCH.h"
-#include "CMarchingCubes.h"
 #include "Metaballs.h"
+#include "CMarchingCubes.h"
+#include "GameFramework/MovementComponent.h"
+#include "GameFramework/Actor.h"
+#include "ProceduralMeshComponent.h"
+#include "Components/CapsuleComponent.h"
+#include "Components/BoxComponent.h"
+//#include "Runtime/Core/Public/Async/ParallelFor.h"
 
+constexpr int GetIndex(const int X, const int Y, const int Z, const int GridSize)
+{
+	/* Replaces all instances of:
+	x +
+	y*(m_nGridSize + 1) +
+    z*(m_nGridSize + 1)*(m_nGridSize + 1)
+    */
+	
+	return X + Y*(GridSize + 1) + Z*(GridSize + 1) * (GridSize + 1);
+}
 
+constexpr int GetIndexNoAdd(const int X, const int Y, const int Z, const int GridSize)
+{
+	/* Replaces all instances of:
+	x +
+	y*m_nGridSize +
+	z*m_nGridSize*m_nGridSize
+	*/
+	
+	return X + Y * GridSize + Z * GridSize * GridSize;
+}
 
+DECLARE_CYCLE_STAT(TEXT("MetaBall - Update"), STAT_MetaBallUpdate, STATGROUP_MetaBall);
+DECLARE_CYCLE_STAT(TEXT("MetaBall - Render"), STAT_MetaBallRender, STATGROUP_MetaBall);
+
+DECLARE_CYCLE_STAT(TEXT("MetaBall - ComputeNormal"), STAT_MetaBallComputeNormal, STATGROUP_MetaBall);
+DECLARE_CYCLE_STAT(TEXT("MetaBall - AddNeighborToList"), STAT_MetaBallAddNeighborToList, STATGROUP_MetaBall);
+DECLARE_CYCLE_STAT(TEXT("MetaBall - AddNeighbor"), STAT_MetaBallAddNeighbor, STATGROUP_MetaBall);
+DECLARE_CYCLE_STAT(TEXT("MetaBall - ComputeEnergy"), STAT_MetaBallComputeEnergy, STATGROUP_MetaBall);
+DECLARE_CYCLE_STAT(TEXT("MetaBall - ComputeGridpointEnergy"), STAT_MetaBallComputeGridpointEnergy, STATGROUP_MetaBall);
+DECLARE_CYCLE_STAT(TEXT("MetaBall - ComputeGridVoxel"), STAT_MetaBallComputeGridVoxel, STATGROUP_MetaBall);
+DECLARE_CYCLE_STAT(TEXT("MetaBall - SetBallTransform"), STAT_MetaBallSetBallTransform, STATGROUP_MetaBall);
 
 
 // Sets default values
@@ -55,19 +89,20 @@ AMetaballs::AMetaballs(const FObjectInitializer& ObjectInitializer) : Super(Obje
 
 
 	m_Scale = 100.0f;
-	m_NumBalls = 8;
+	m_NumBalls = 4;
 	m_automode = true;
-	m_GridStep = AMetaballs::MIN_GRID_STEPS;
+	m_GridStep = 32;
 	m_randomseed = false;
 	m_AutoLimitX = 1.0f;
 	m_AutoLimitY = 1.0f;
 	m_AutoLimitZ = 1.0f;
-	m_Material = 0;
+	
+	m_Material = nullptr;
 
 
-	m_pfGridEnergy = 0;
-	m_pnGridPointStatus = 0;
-	m_pnGridVoxelStatus = 0;
+	m_pfGridEnergy = nullptr;
+	m_pnGridPointStatus = nullptr;
+	m_pnGridVoxelStatus = nullptr;
 
 
 
@@ -83,13 +118,13 @@ void AMetaballs::PostInitializeComponents()
 
 	m_nGridSize = 0;
 
-	m_nMaxOpenVoxels = AMetaballs::MAX_OPEN_VOXELS;
+	m_nMaxOpenVoxels = MAX_OPEN_VOXELS;
 	m_pOpenVoxels = new int[m_nMaxOpenVoxels * 3];
 
 	m_nNumOpenVoxels = 0;
-	m_pfGridEnergy = 0;
-	m_pnGridPointStatus = 0;
-	m_pnGridVoxelStatus = 0;
+	m_pfGridEnergy = nullptr;
+	m_pnGridPointStatus = nullptr;
+	m_pnGridVoxelStatus = nullptr;
 
 	m_nNumVertices = 0;
 	m_nNumIndices = 0;
@@ -116,24 +151,24 @@ void AMetaballs::PostInitializeComponents()
 DEFINE_LOG_CATEGORY(YourLog);
 
 #if WITH_EDITOR
-void AMetaballs::PostEditChangeProperty(struct FPropertyChangedEvent& e)
+void AMetaballs::PostEditChangeProperty(FPropertyChangedEvent& e)
 {
 
 
 	UE_LOG(YourLog, Warning, TEXT("changed respond"));
 
-	FName PropertyName = (e.Property != NULL) ? e.Property->GetFName() : NAME_None;
+	const FName PropertyName = (e.Property != nullptr) ? e.Property->GetFName() : NAME_None;
 
 	/// track Number of balls value
 	if (PropertyName == GET_MEMBER_NAME_CHECKED(AMetaballs, m_NumBalls))
 	{
-		UIntProperty* prop = static_cast<UIntProperty*>(e.Property);
+		FIntProperty* prop = static_cast<FIntProperty*>(e.Property);
 
-		int32 value = prop->GetPropertyValue(prop->ContainerPtrToValuePtr<int32>(this));
+		const int32 value = prop->GetPropertyValue(prop->ContainerPtrToValuePtr<int32>(this));
 
 		SetNumBalls(value);
 
-		if (value < 0 && value > AMetaballs::MAX_METABALLS)
+		if (value < 0 && value > MAX_METABALLS)
 		{
 			prop->SetPropertyValue(prop->ContainerPtrToValuePtr<int32>(this), m_NumBalls);
 		}
@@ -148,13 +183,13 @@ void AMetaballs::PostEditChangeProperty(struct FPropertyChangedEvent& e)
 	if (PropertyName == GET_MEMBER_NAME_CHECKED(AMetaballs, m_Scale))
 	{
 
-		UFloatProperty* prop = static_cast<UFloatProperty*>(e.Property);
+		FFloatProperty* prop = static_cast<FFloatProperty*>(e.Property);
 
-		float value = prop->GetPropertyValue(prop->ContainerPtrToValuePtr<float>(this));
+		const float value = prop->GetPropertyValue(prop->ContainerPtrToValuePtr<float>(this));
 
 		SetScale(value);
 
-		if (value < AMetaballs::MIN_SCALE)
+		if (value < MIN_SCALE)
 		{
 			prop->SetPropertyValue(prop->ContainerPtrToValuePtr<float>(this), m_Scale);
 		}
@@ -171,13 +206,13 @@ void AMetaballs::PostEditChangeProperty(struct FPropertyChangedEvent& e)
 	if (PropertyName == GET_MEMBER_NAME_CHECKED(AMetaballs, m_GridStep))
 	{
 
-		UIntProperty* prop = static_cast<UIntProperty*>(e.Property);
+		FIntProperty* prop = static_cast<FIntProperty*>(e.Property);
 
-		int32 value = prop->GetPropertyValue(prop->ContainerPtrToValuePtr<int32>(this));
+		const int32 value = prop->GetPropertyValue(prop->ContainerPtrToValuePtr<int32>(this));
 
 		SetGridSteps(value);
 
-		if (value < AMetaballs::MIN_GRID_STEPS && value > AMetaballs::MAX_GRID_STEPS)
+		if (value < MIN_GRID_STEPS && value > MAX_GRID_STEPS)
 		{
 			prop->SetPropertyValue(prop->ContainerPtrToValuePtr<int32>(this), m_GridStep);
 		}
@@ -190,13 +225,13 @@ void AMetaballs::PostEditChangeProperty(struct FPropertyChangedEvent& e)
 	if (PropertyName == GET_MEMBER_NAME_CHECKED(AMetaballs, m_AutoLimitX))
 	{
 
-		UFloatProperty* prop = static_cast<UFloatProperty*>(e.Property);
+		FFloatProperty* prop = static_cast<FFloatProperty*>(e.Property);
 
-		float value = prop->GetPropertyValue(prop->ContainerPtrToValuePtr<float>(this));
+		const float value = prop->GetPropertyValue(prop->ContainerPtrToValuePtr<float>(this));
 
 		SetAutoLimitX(value);
 
-		if (value < AMetaballs::MIN_LIMIT && value < AMetaballs::MAX_LIMIT)
+		if (value < MIN_LIMIT && value < MAX_LIMIT)
 		{
 			prop->SetPropertyValue(prop->ContainerPtrToValuePtr<float>(this), m_AutoLimitX);
 		}
@@ -209,13 +244,13 @@ void AMetaballs::PostEditChangeProperty(struct FPropertyChangedEvent& e)
 	if (PropertyName == GET_MEMBER_NAME_CHECKED(AMetaballs, m_AutoLimitY))
 	{
 
-		UFloatProperty* prop = static_cast<UFloatProperty*>(e.Property);
+		FFloatProperty* prop = static_cast<FFloatProperty*>(e.Property);
 
-		float value = prop->GetPropertyValue(prop->ContainerPtrToValuePtr<float>(this));
+		const float value = prop->GetPropertyValue(prop->ContainerPtrToValuePtr<float>(this));
 
 		SetAutoLimitY(value);
 
-		if (value < AMetaballs::MIN_LIMIT && value < AMetaballs::MAX_LIMIT)
+		if (value < MIN_LIMIT && value < MAX_LIMIT)
 		{
 			prop->SetPropertyValue(prop->ContainerPtrToValuePtr<float>(this), m_AutoLimitY);
 		}
@@ -229,13 +264,13 @@ void AMetaballs::PostEditChangeProperty(struct FPropertyChangedEvent& e)
 	if (PropertyName == GET_MEMBER_NAME_CHECKED(AMetaballs, m_AutoLimitZ))
 	{
 
-		UFloatProperty* prop = static_cast<UFloatProperty*>(e.Property);
+		FFloatProperty* prop = static_cast<FFloatProperty*>(e.Property);
 
-		float value = prop->GetPropertyValue(prop->ContainerPtrToValuePtr<float>(this));
+		const float value = prop->GetPropertyValue(prop->ContainerPtrToValuePtr<float>(this));
 
 		SetAutoLimitZ(value);
 
-		if (value < AMetaballs::MIN_LIMIT && value < AMetaballs::MAX_LIMIT)
+		if (value < MIN_LIMIT && value < MAX_LIMIT)
 		{
 			prop->SetPropertyValue(prop->ContainerPtrToValuePtr<float>(this), m_AutoLimitZ);
 		}
@@ -271,6 +306,7 @@ void AMetaballs::Tick( float DeltaTime )
 
 void AMetaballs::Update(float dt)
 {
+	//SCOPE_CYCLE_COUNTER(STAT_MetaBallUpdate);
 
 	if (!m_automode)
 		return;
@@ -284,11 +320,11 @@ void AMetaballs::Update(float dt)
 		m_Balls[i].t -= dt;
 		if (m_Balls[i].t < 0)
 		{
-			m_Balls[i].t = float(rand()) / RAND_MAX;
+			m_Balls[i].t = static_cast<float>(rand()) / RAND_MAX;
 
-			m_Balls[i].a.X = m_AutoLimitY * (float(rand()) / RAND_MAX * 2 - 1);
-			m_Balls[i].a.Y = m_AutoLimitX * (float(rand()) / RAND_MAX * 2 - 1);
-			m_Balls[i].a.Z = m_AutoLimitZ * (float(rand()) / RAND_MAX * 2 - 1);
+			m_Balls[i].a.X = m_AutoLimitY * (static_cast<float>(rand()) / RAND_MAX * 2 - 1);
+			m_Balls[i].a.Y = m_AutoLimitX * (static_cast<float>(rand()) / RAND_MAX * 2 - 1);
+			m_Balls[i].a.Z = m_AutoLimitZ * (static_cast<float>(rand()) / RAND_MAX * 2 - 1);
 
 		}
 
@@ -358,8 +394,8 @@ void AMetaballs::Update(float dt)
 void AMetaballs::Render()
 {
 
+	//SCOPE_CYCLE_COUNTER(STAT_MetaBallRender);
 	
-
 	m_vertices.Empty();
 	m_Triangles.Empty();
 	m_normals.Empty();
@@ -368,28 +404,26 @@ void AMetaballs::Render()
 
 	m_mesh->ClearAllMeshSections();
 
-	int nCase, x, y, z;
-	bool bComputed;
-
 	m_nNumIndices = 0;
 	m_nNumVertices = 0;
-	nCase = 0;
+	int nCase = 0;
 
 	// Clear status grids
-	memset(m_pnGridPointStatus, 0, (m_nGridSize + 1)*(m_nGridSize + 1)*(m_nGridSize + 1));
-	memset(m_pnGridVoxelStatus, 0, m_nGridSize*m_nGridSize*m_nGridSize);
-
-
+	//memset(m_pnGridPointStatus, 0, (m_nGridSize + 1)*(m_nGridSize + 1)*(m_nGridSize + 1));
+	FMemory::Memset(m_pnGridPointStatus, 0, (m_nGridSize + 1)*(m_nGridSize + 1)*(m_nGridSize + 1));
+	//memset(m_pnGridVoxelStatus, 0, m_nGridSize*m_nGridSize*m_nGridSize);
+	FMemory::Memset(m_pnGridVoxelStatus, 0, m_nGridSize*m_nGridSize*m_nGridSize);
 
 	for (int i = 0; i < m_NumBalls; i++)
 	{
-		x = ConvertWorldCoordinateToGridPoint(m_Balls[i].p[0]);
-		y = ConvertWorldCoordinateToGridPoint(m_Balls[i].p[1]);
-		z = ConvertWorldCoordinateToGridPoint(m_Balls[i].p[2]);
+		int x = ConvertWorldCoordinateToGridPoint(m_Balls[i].p[0]);
+		int y = ConvertWorldCoordinateToGridPoint(m_Balls[i].p[1]);
+		int z = ConvertWorldCoordinateToGridPoint(m_Balls[i].p[2]);
 
-		bComputed = false;
+		bool bComputed = false;
 
-		while (1)
+		// TODO: Check if bComputed can be used instead of constant
+		while (true)
 		{
 			if (IsGridVoxelComputed(x, y, z))
 			{
@@ -423,50 +457,39 @@ void AMetaballs::Render()
 
 	}
 
-//	UKismetProceduralMeshLibrary::CalculateTangentsForMesh(m_vertices, m_Triangles, m_UV0, m_normals, m_tangents);
-
 	m_mesh->CreateMeshSection(1, m_vertices, m_Triangles, m_normals, m_UV0, m_vertexColors, m_tangents, false);
-
-
 }
 
 
-
-void AMetaballs::ComputeNormal(FVector vertex)
+void AMetaballs::ComputeNormal(const FVector Vertex)
 {
-
-	float fSqDist;
-
-	float n0 = 0.0f;
-	float n1 = 0.0f;
-	float n2 = 0.0f;
+	//SCOPE_CYCLE_COUNTER(STAT_MetaBallComputeNormal);
+	FVector NVector = FVector::ZeroVector;
 
 	for (int i = 0; i < m_NumBalls; i++)
 	{
-		float x = vertex.X - m_Balls[i].p.Z;
-		float y = vertex.Y - m_Balls[i].p.Y;
-		float z = vertex.Z - m_Balls[i].p.X;
+		FVector CalcVector = FVector(
+		Vertex.X - m_Balls[i].p.Z,
+		Vertex.Y - m_Balls[i].p.Y,
+		Vertex.Z - m_Balls[i].p.X);
 
-		fSqDist = x*x + y*y + z*z;
-
-		n0 = n0 + 2 * m_Balls[i].m * x / (fSqDist * fSqDist);
-		n1 = n1 + 2 * m_Balls[i].m * y / (fSqDist * fSqDist);
-		n2 = n2 + 2 * m_Balls[i].m * z / (fSqDist * fSqDist);
-
+		//const float SquareDistVector = FVector::DistSquared(CalcVector, CalcVector * -1);
+		const float SquareDistVector = FMath::Pow(FMath::Square(CalcVector.X) + FMath::Square(CalcVector.Y) + FMath::Square(CalcVector.Z), 2);
+		
+		
+		NVector = NVector + 2 * m_Balls[i].m * CalcVector / (SquareDistVector);
 	}
 
-	FVector normal = FVector(n0, n1, n2);
-	normal.Normalize();
-	
-	m_normals.Add(normal);
-
-	m_UV0.Add(FVector2D(normal.X, normal.Y));
-
+	NVector.Normalize();
+	m_normals.Add(NVector);
+	m_UV0.Add(FVector2D(NVector.X, NVector.Y));
 }
 
 
 void AMetaballs::AddNeighborsToList(int nCase, int x, int y, int z)
 {
+	//SCOPE_CYCLE_COUNTER(STAT_MetaBallAddNeighborToList);
+
 	if (CMarchingCubes::m_CubeNeighbors[nCase] & (1 << 0))
 		AddNeighbor(x + 1, y, z);
 
@@ -489,6 +512,8 @@ void AMetaballs::AddNeighborsToList(int nCase, int x, int y, int z)
 
 void AMetaballs::AddNeighbor(int x, int y, int z)
 {
+	//SCOPE_CYCLE_COUNTER(STAT_MetaBallAddNeighbor);
+
 	if (IsGridVoxelComputed(x, y, z) || IsGridVoxelInList(x, y, z))
 		return;
 
@@ -497,11 +522,12 @@ void AMetaballs::AddNeighbor(int x, int y, int z)
 	{
 		m_nMaxOpenVoxels *= 2;
 		int *pTmp = new int[m_nMaxOpenVoxels * 3];
-		memcpy(pTmp, m_pOpenVoxels, m_nNumOpenVoxels * 3 * sizeof(int));
+		//memcpy(pTmp, m_pOpenVoxels, m_nNumOpenVoxels * 3 * sizeof(int));
+		FMemory::Memcpy(pTmp, m_pOpenVoxels, m_nNumOpenVoxels * 3 * sizeof(int));
 		delete[] m_pOpenVoxels;
 		m_pOpenVoxels = pTmp;
 	}
-
+	
 	m_pOpenVoxels[m_nNumOpenVoxels * 3] = x;
 	m_pOpenVoxels[m_nNumOpenVoxels * 3 + 1] = y;
 	m_pOpenVoxels[m_nNumOpenVoxels * 3 + 2] = z;
@@ -511,10 +537,11 @@ void AMetaballs::AddNeighbor(int x, int y, int z)
 	m_nNumOpenVoxels++;
 }
 
-float AMetaballs::ComputeEnergy(float x, float y, float z)
+float AMetaballs::ComputeEnergy(const float x, const float y, const float z) const
 {
+	//SCOPE_CYCLE_COUNTER(STAT_MetaBallComputeEnergy);
+
 	float fEnergy = 0;
-	float fSqDist;
 
 	for (int i = 0; i < m_NumBalls; i++)
 	{
@@ -522,9 +549,9 @@ float AMetaballs::ComputeEnergy(float x, float y, float z)
 		// 
 		//   e += mass/distance^2 
 
-		fSqDist = (m_Balls[i].p.X - x)*(m_Balls[i].p.X - x) +
-			(m_Balls[i].p.Y - y)*(m_Balls[i].p.Y - y) +
-			(m_Balls[i].p.Z - z)*(m_Balls[i].p.Z - z);
+		float fSqDist = (m_Balls[i].p.X - x) * (m_Balls[i].p.X - x) +
+			(m_Balls[i].p.Y - y) * (m_Balls[i].p.Y - y) +
+			(m_Balls[i].p.Z - z) * (m_Balls[i].p.Z - z);
 
 		if (fSqDist < 0.0001f) fSqDist = 0.0001f;
 
@@ -535,43 +562,41 @@ float AMetaballs::ComputeEnergy(float x, float y, float z)
 }
 
 
-float AMetaballs::ComputeGridPointEnergy(int x, int y, int z)
+float AMetaballs::ComputeGridPointEnergy(const int x, const int y, const int z) const
 {
+	//SCOPE_CYCLE_COUNTER(STAT_MetaBallComputeGridpointEnergy);
+	
+	const int Index = GetIndex(x, y, z, m_nGridSize);
+	
 	if (IsGridPointComputed(x, y, z))
-		return m_pfGridEnergy[x +
-		y*(m_nGridSize + 1) +
-		z*(m_nGridSize + 1)*(m_nGridSize + 1)];
+		return m_pfGridEnergy[Index];
 
 	// The energy on the edges are always zero to make sure the isosurface is
 	// always closed.
 	if (x == 0 || y == 0 || z == 0 ||
 		x == m_nGridSize || y == m_nGridSize || z == m_nGridSize)
 	{
-		m_pfGridEnergy[x +
-			y*(m_nGridSize + 1) +
-			z*(m_nGridSize + 1)*(m_nGridSize + 1)] = 0;
+		m_pfGridEnergy[Index] = 0;
 		SetGridPointComputed(x, y, z);
 		return 0;
 	}
 
-	float fx = ConvertGridPointToWorldCoordinate(x);
-	float fy = ConvertGridPointToWorldCoordinate(y);
-	float fz = ConvertGridPointToWorldCoordinate(z);
+	const float fx = ConvertGridPointToWorldCoordinate(x);
+	const float fy = ConvertGridPointToWorldCoordinate(y);
+	const float fz = ConvertGridPointToWorldCoordinate(z);
 
-	m_pfGridEnergy[x +
-		y*(m_nGridSize + 1) +
-		z*(m_nGridSize + 1)*(m_nGridSize + 1)] = ComputeEnergy(fx, fy, fz);
+	m_pfGridEnergy[Index] = ComputeEnergy(fx, fy, fz);
 
 	SetGridPointComputed(x, y, z);
 
-	return m_pfGridEnergy[x +
-		y*(m_nGridSize + 1) +
-		z*(m_nGridSize + 1)*(m_nGridSize + 1)];
+	return m_pfGridEnergy[Index];
 }
 
 
 int AMetaballs::ComputeGridVoxel(int x, int y, int z)
 {
+	//SCOPE_CYCLE_COUNTER(STAT_MetaBallComputeGridVoxel);
+
 	float b[8];
 
 	b[0] = ComputeGridPointEnergy(x, y, z);
@@ -583,10 +608,6 @@ int AMetaballs::ComputeGridVoxel(int x, int y, int z)
 	b[6] = ComputeGridPointEnergy(x + 1, y + 1, z + 1);
 	b[7] = ComputeGridPointEnergy(x, y + 1, z + 1);
 
-	float fx = ConvertGridPointToWorldCoordinate(x) + m_fVoxelSize / 2;
-	float fy = ConvertGridPointToWorldCoordinate(y) + m_fVoxelSize / 2;
-	float fz = ConvertGridPointToWorldCoordinate(z) + m_fVoxelSize / 2;
-
 	int c = 0;
 	c |= b[0] > m_fLevel ? (1 << 0) : 0;
 	c |= b[1] > m_fLevel ? (1 << 1) : 0;
@@ -597,19 +618,20 @@ int AMetaballs::ComputeGridVoxel(int x, int y, int z)
 	c |= b[6] > m_fLevel ? (1 << 6) : 0;
 	c |= b[7] > m_fLevel ? (1 << 7) : 0;
 
-	// Compute vertices from marching pyramid case
-	fx = ConvertGridPointToWorldCoordinate(x);
-	fy = ConvertGridPointToWorldCoordinate(y);
-	fz = ConvertGridPointToWorldCoordinate(z);
-
+	
+	const FVector PyramidVector = FVector(
+		ConvertGridPointToWorldCoordinate(x),
+		ConvertGridPointToWorldCoordinate(y),
+		ConvertGridPointToWorldCoordinate(z));
+		
 	int i = 0;
 	unsigned short EdgeIndices[12];
-	memset(EdgeIndices, 0xFF, 12 * sizeof(unsigned short));
+	//memset(EdgeIndices, 0xFF, 12 * sizeof(unsigned short));
+	FMemory::Memset(EdgeIndices, 0xFF, 12 * sizeof(unsigned short));
 
-	float v0, v1, v2;
-	while (1)
+	while (true)
 	{
-		int nEdge = CMarchingCubes::m_CubeTriangles[c][i];
+		const int nEdge = CMarchingCubes::m_CubeTriangles[c][i];
 		if (nEdge == -1)
 			break;
 
@@ -618,22 +640,22 @@ int AMetaballs::ComputeGridVoxel(int x, int y, int z)
 			EdgeIndices[nEdge] = m_nNumVertices;
 
 			// Compute the vertex by interpolating between the two points
-			int nIndex0 = CMarchingCubes::m_CubeEdges[nEdge][0];
-			int nIndex1 = CMarchingCubes::m_CubeEdges[nEdge][1];
+			const int nIndex0 = CMarchingCubes::m_CubeEdges[nEdge][0];
+			const int nIndex1 = CMarchingCubes::m_CubeEdges[nEdge][1];
 
-			float t = (m_fLevel - b[nIndex0]) / (b[nIndex1] - b[nIndex0]);
+			const float t = (m_fLevel - b[nIndex0]) / (b[nIndex1] - b[nIndex0]);
 
-			v0 = CMarchingCubes::m_CubeVertices[nIndex0][0] * (1 - t) + CMarchingCubes::m_CubeVertices[nIndex1][0] * t;
-			v1 = CMarchingCubes::m_CubeVertices[nIndex0][1] * (1 - t) + CMarchingCubes::m_CubeVertices[nIndex1][1] * t;
-			v2 = CMarchingCubes::m_CubeVertices[nIndex0][2] * (1 - t) + CMarchingCubes::m_CubeVertices[nIndex1][2] * t;
+			FVector CubesVector = FVector(
+			CMarchingCubes::m_CubeVertices[nIndex0][0] * (1 - t) + CMarchingCubes::m_CubeVertices[nIndex1][0] * t,
+			CMarchingCubes::m_CubeVertices[nIndex0][1] * (1 - t) + CMarchingCubes::m_CubeVertices[nIndex1][1] * t,
+			CMarchingCubes::m_CubeVertices[nIndex0][2] * (1 - t) + CMarchingCubes::m_CubeVertices[nIndex1][2] * t);
 
-			v0 = fx + v0 * m_fVoxelSize;
-			v1 = fy + v1 * m_fVoxelSize;
-			v2 = fz + v2 * m_fVoxelSize;
+			FVector EdgeVector = PyramidVector + CubesVector * m_fVoxelSize;
+			EdgeVector = FVector(EdgeVector.Z, EdgeVector.Y, EdgeVector.X);
 
-			ComputeNormal(FVector(v2, v1, v0));
+			ComputeNormal(EdgeVector);
 
-			m_vertices.Add(FVector(v2 * m_Scale, v1 * m_Scale, v0 * m_Scale));
+			m_vertices.Add(EdgeVector * m_Scale);
 
 			m_nNumVertices++;
 		}
@@ -651,17 +673,17 @@ int AMetaballs::ComputeGridVoxel(int x, int y, int z)
 
 }
 
-float AMetaballs::ConvertGridPointToWorldCoordinate(int x)
+float AMetaballs::ConvertGridPointToWorldCoordinate(const int x) const
 {
-	return float(x)*m_fVoxelSize - 1.0f;
+	return static_cast<float>(x) * m_fVoxelSize - 1.0f;
 }
 
-int AMetaballs::ConvertWorldCoordinateToGridPoint(float x)
+int AMetaballs::ConvertWorldCoordinateToGridPoint(const float x) const
 {
-	return int((x + 1.0f) / m_fVoxelSize + 0.5f);
+	return static_cast<int>((x + 1.0f) / m_fVoxelSize + 0.5f);
 }
 
-void AMetaballs::SetGridSize(int nSize)
+void AMetaballs::SetGridSize(const int nSize)
 {
 	if (m_pfGridEnergy)
 		delete m_pfGridEnergy;
@@ -672,7 +694,7 @@ void AMetaballs::SetGridSize(int nSize)
 	if (m_pnGridVoxelStatus)
 		delete m_pnGridVoxelStatus;
 
-	m_fVoxelSize = 2 / float(nSize);
+	m_fVoxelSize = 2 / static_cast<float>(nSize);
 	m_nGridSize = nSize;
 
 	m_pfGridEnergy = new float[(nSize + 1)*(nSize + 1)*(nSize + 1)];
@@ -680,63 +702,47 @@ void AMetaballs::SetGridSize(int nSize)
 	m_pnGridVoxelStatus = new char[nSize*nSize*nSize];
 }
 
-inline bool AMetaballs::IsGridPointComputed(int x, int y, int z)
+inline bool AMetaballs::IsGridPointComputed(const int x, const int y, const int z) const
 {
-	if (m_pnGridPointStatus[x +
-		y*(m_nGridSize + 1) +
-		z*(m_nGridSize + 1)*(m_nGridSize + 1)] == 1)
-		return true;
-	else
-		return false;
+	return static_cast<bool>(m_pnGridPointStatus[GetIndex(x, y, z, m_nGridSize)] == 1);
 }
 
-inline bool AMetaballs::IsGridVoxelComputed(int x, int y, int z)
+inline bool AMetaballs::IsGridVoxelComputed(const int x, const int y, const int z) const
 {
-	if (m_pnGridVoxelStatus[x +
-		y*m_nGridSize +
-		z*m_nGridSize*m_nGridSize] == 1)
-		return true;
-	else
-		return false;
+	 return static_cast<bool>(m_pnGridVoxelStatus[GetIndexNoAdd(x, y, z, m_nGridSize)] == 1);
 }
 
-inline bool AMetaballs::IsGridVoxelInList(int x, int y, int z)
+inline bool AMetaballs::IsGridVoxelInList(const int x, const int y, const int z) const
 {
-	if (m_pnGridVoxelStatus[x +
-		y*m_nGridSize +
-		z*m_nGridSize*m_nGridSize] == 2)
-		return true;
-	else
-		return false;
+	return static_cast<bool>(m_pnGridVoxelStatus[GetIndexNoAdd(x, y, z, m_nGridSize)] == 2);
 }
 
-inline void AMetaballs::SetGridPointComputed(int x, int y, int z)
+inline void AMetaballs::SetGridPointComputed(const int x, const int y, const int z) const
 {
-	m_pnGridPointStatus[x +
-		y*(m_nGridSize + 1) +
-		z*(m_nGridSize + 1)*(m_nGridSize + 1)] = 1;
+	m_pnGridPointStatus[GetIndex(x, y, z, m_nGridSize)] = 1;
 }
 
-inline void AMetaballs::SetGridVoxelComputed(int x, int y, int z)
+inline void AMetaballs::SetGridVoxelComputed(const int x, const int y, const int z) const
 {
-	m_pnGridVoxelStatus[x +
-		y*m_nGridSize +
-		z*m_nGridSize*m_nGridSize] = 1;
+	m_pnGridVoxelStatus[GetIndexNoAdd(x, y, z, m_nGridSize)] = 1;
 }
 
-inline void AMetaballs::SetGridVoxelInList(int x, int y, int z)
+inline void AMetaballs::SetGridVoxelInList(const int x, const int y, const int z) const
 {
-	m_pnGridVoxelStatus[x +
-		y*m_nGridSize +
-		z*m_nGridSize*m_nGridSize] = 2;
+	m_pnGridVoxelStatus[GetIndexNoAdd(x, y, z, m_nGridSize)] = 2;
+}
+
+inline FVector AMetaballs::ConvertGridPointToWorldCoordinate(const FVector& Vector) const
+{
+	return Vector * m_fVoxelSize - FVector::OneVector;
 }
 
 void AMetaballs::InitBalls()
 {
-	FDateTime curTime;
+	const FDateTime curTime;
 	srand(curTime.GetTicks());
 
-	for (int i = 0; i < AMetaballs::MAX_METABALLS; i++)
+	for (int i = 0; i < MAX_METABALLS; i++)
 	{
 		float p0 = 0.0f;
 		float p1 = 0.0f;
@@ -747,13 +753,13 @@ void AMetaballs::InitBalls()
 
 		if (m_randomseed)
 		{
-			p0 = m_AutoLimitY * (float(rand()) / RAND_MAX * 2 - 1);
-			p1 = m_AutoLimitX * (float(rand()) / RAND_MAX * 2 - 1);
-			p2 = m_AutoLimitZ * (float(rand()) / RAND_MAX * 2 - 1);
+			p0 = m_AutoLimitY * (static_cast<float>(rand()) / RAND_MAX * 2 - 1);
+			p1 = m_AutoLimitX * (static_cast<float>(rand()) / RAND_MAX * 2 - 1);
+			p2 = m_AutoLimitZ * (static_cast<float>(rand()) / RAND_MAX * 2 - 1);
 
-			v0 = (float(rand()) / RAND_MAX * 2 - 1) / 2;
-			v1 = (float(rand()) / RAND_MAX * 2 - 1) / 2;
-			v2 = (float(rand()) / RAND_MAX * 2 - 1) / 2;
+			v0 = (static_cast<float>(rand()) / RAND_MAX * 2 - 1) / 2;
+			v1 = (static_cast<float>(rand()) / RAND_MAX * 2 - 1) / 2;
+			v2 = (static_cast<float>(rand()) / RAND_MAX * 2 - 1) / 2;
 		}
 
 		m_Balls[i].p.X = p0;
@@ -762,116 +768,80 @@ void AMetaballs::InitBalls()
 		m_Balls[i].v.X = v0;
 		m_Balls[i].v.Y = v1;
 		m_Balls[i].v.Z = v2;
-		m_Balls[i].a.X = m_AutoLimitY * (float(rand()) / RAND_MAX * 2 - 1);
-		m_Balls[i].a.Y = m_AutoLimitX * (float(rand()) / RAND_MAX * 2 - 1);
-		m_Balls[i].a.Z = m_AutoLimitZ * (float(rand()) / RAND_MAX * 2 - 1);
-		m_Balls[i].t = float(rand()) / RAND_MAX;
+		m_Balls[i].a.X = m_AutoLimitY * (static_cast<float>(rand()) / RAND_MAX * 2 - 1);
+		m_Balls[i].a.Y = m_AutoLimitX * (static_cast<float>(rand()) / RAND_MAX * 2 - 1);
+		m_Balls[i].a.Z = m_AutoLimitZ * (static_cast<float>(rand()) / RAND_MAX * 2 - 1);
+		m_Balls[i].t = static_cast<float>(rand()) / RAND_MAX;
 		m_Balls[i].m = 1;
 	}
 }
 
 
-void AMetaballs::SetBallTransform(int32 index, FVector transfrom)
+void AMetaballs::SetBallTransform(const int32 Index, const FVector Transform)
 {
-	if (index > m_NumBalls - 1)
+	if (Index > m_NumBalls - 1)
 	{
 		return;
 	}
-	else
-	{
-		m_Balls[index].p.Y = transfrom.X;
-		m_Balls[index].p.X = transfrom.Y;
-		m_Balls[index].p.Z = transfrom.Z;
-	}
-}
-
-void AMetaballs::SetNumBalls(int value)
-{
-	int32 ret = value;
 	
-	if (ret < 0)
-	{
-		ret = 0;
-	}
+	//SCOPE_CYCLE_COUNTER(STAT_MetaBallSetBallTransform);
+	m_Balls[Index].p.Y = Transform.X;
+	m_Balls[Index].p.X = Transform.Y;
+	m_Balls[Index].p.Z = Transform.Z;
+}
 
-	if (ret > AMetaballs::MAX_METABALLS)
-	{
-		ret = AMetaballs::MAX_METABALLS;
-	}
-
-	m_NumBalls = ret;
+void AMetaballs::SetNumBalls(const int Value)
+{
+	m_NumBalls = FMath::Clamp<int32>(Value, 0, MAX_METABALLS);;
 }
 
 
-void AMetaballs::SetScale(float value)
+void AMetaballs::SetScale(float Value)
 {
-	float ret = value;
+	float ret = Value;
 
-	if (ret < AMetaballs::MIN_SCALE)
+	if (ret < MIN_SCALE)
 	{
-		ret = AMetaballs::MIN_SCALE;
+		ret = MIN_SCALE;
 	}
 
 	m_Scale = ret;
 }
 
 
-void AMetaballs::SetGridSteps(int32 value)
+void AMetaballs::SetGridSteps(const int32 Value)
 {
-	int32 ret = value;
-
-	if (ret < AMetaballs::MIN_GRID_STEPS)
-	{
-		ret = AMetaballs::MIN_GRID_STEPS;
-	}
-
-	if (ret > AMetaballs::MAX_GRID_STEPS)
-	{
-		ret = AMetaballs::MAX_GRID_STEPS;
-	}
-
-	m_GridStep = ret;
+	m_GridStep = FMath::Clamp<int32>(Value, MIN_GRID_STEPS, MAX_GRID_STEPS);
 
 	SetGridSize(m_GridStep);
 }
 
-void AMetaballs::SetRandomSeed(bool seed)
+void AMetaballs::SetRandomSeed(const bool bSeed)
 {
-	m_randomseed = seed;
+	m_randomseed = bSeed;
 }
 
-void AMetaballs::SetAutoMode(bool mode)
+void AMetaballs::SetAutoMode(const bool bMode)
 {
-	m_automode = mode;
+	m_automode = bMode;
 }
 
-float AMetaballs::CheckLimit(float value)
+float AMetaballs::CheckLimit(const float Value) const
 {
-	float ret = value;
-	if (ret < AMetaballs::MIN_LIMIT)
-	{
-		ret = AMetaballs::MIN_LIMIT;
-	}
-
-	if (ret > AMetaballs::MAX_LIMIT)
-	{
-		ret = AMetaballs::MAX_LIMIT;
-	}
-
-	return ret;
+	return FMath::Clamp<float>(Value, MIN_LIMIT, MAX_LIMIT);
 }
 
-void AMetaballs::SetAutoLimitX(float limit)
+void AMetaballs::SetAutoLimitX(const float Limit)
 {
-	m_AutoLimitX = CheckLimit(limit);
+	m_AutoLimitX = FMath::Clamp<float>(Limit, MIN_LIMIT, MAX_LIMIT);
 }
 
-void AMetaballs::SetAutoLimitY(float limit)
+void AMetaballs::SetAutoLimitY(const float Limit)
 {
-	m_AutoLimitY = CheckLimit(limit);
+	m_AutoLimitY = FMath::Clamp<float>(Limit, MIN_LIMIT, MAX_LIMIT);
 }
 
-void AMetaballs::SetAutoLimitZ(float limit)
+void AMetaballs::SetAutoLimitZ(const float Limit)
 {
-	m_AutoLimitZ = CheckLimit(limit);
+	m_AutoLimitZ = FMath::Clamp<float>(Limit, MIN_LIMIT, MAX_LIMIT);
 }
