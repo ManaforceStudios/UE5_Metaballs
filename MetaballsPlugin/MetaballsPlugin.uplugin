@@ -6,7 +6,7 @@
   "Description": "Provides the code for the Metaballs fx",
   "Category": "Metaballs",
   "CreatedBy": "Andrey Harchenko",
-  "CreatedByURL": "",
+  "CreatedByURL": "https://github.com/amstaddigital/ue4_metaballs",
   "CanContainContent": "true",
   "EnabledByDefault": true,
 
