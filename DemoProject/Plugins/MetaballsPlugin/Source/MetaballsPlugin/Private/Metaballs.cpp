@@ -23,7 +23,6 @@
 #include "ProceduralMeshComponent.h"
 #include "Components/CapsuleComponent.h"
 #include "Components/BoxComponent.h"
-//#include "Runtime/Core/Public/Async/ParallelFor.h"
 
 constexpr int GetIndex(const int X, const int Y, const int Z, const int GridSize)
 {
@@ -71,13 +70,9 @@ AMetaballs::AMetaballs(const FObjectInitializer& ObjectInitializer) : Super(Obje
 	CapsuleComp->SetCollisionResponseToAllChannels(ECR_Ignore);
 	CapsuleComp->SetCollisionResponseToChannel(ECC_Pawn, ECR_Overlap);
 	CapsuleComp->SetMobility(EComponentMobility::Movable);
-//	RootComponent = CapsuleComp;
 
 	MetaBallsBoundBox = ObjectInitializer.CreateDefaultSubobject<UBoxComponent>(this, TEXT("GridBox"));
 	MetaBallsBoundBox->InitBoxExtent(FVector(100, 100, 100));
-//	MetaBallsBoundBox->AttachParent = RootComponent;
-
-
 
 
 	m_mesh = ObjectInitializer.CreateDefaultSubobject<UProceduralMeshComponent>(this, TEXT("MetaballsMesh"));
@@ -134,46 +129,39 @@ void AMetaballs::PostInitializeComponents()
 	CMarchingCubes::BuildTables();
 	SetGridSize(m_GridStep);
 
-//	m_SceneComponent->SetMobility(EComponentMobility::Movable);
-
 	MetaBallsBoundBox->SetBoxExtent(FVector(m_Scale, m_Scale, m_Scale), false);
 	MetaBallsBoundBox->UpdateBodySetup();
 	
 	m_mesh->SetMaterial(1, m_Material);
-//	m_mesh->AttachParent = RootComponent;
-	
-//	m_mesh->SetMobility(EComponentMobility::Movable);
 
 
 }
 
 
-DEFINE_LOG_CATEGORY(YourLog);
+DEFINE_LOG_CATEGORY(MetaballLog);
 
 #if WITH_EDITOR
 void AMetaballs::PostEditChangeProperty(FPropertyChangedEvent& e)
 {
-
-
-	UE_LOG(YourLog, Warning, TEXT("changed respond"));
+	UE_LOG(MetaballLog, Warning, TEXT("changed respond"));
 
 	const FName PropertyName = (e.Property != nullptr) ? e.Property->GetFName() : NAME_None;
 
 	/// track Number of balls value
 	if (PropertyName == GET_MEMBER_NAME_CHECKED(AMetaballs, m_NumBalls))
 	{
-		FIntProperty* prop = static_cast<FIntProperty*>(e.Property);
+		FIntProperty* Prop = static_cast<FIntProperty*>(e.Property);
 
-		const int32 value = prop->GetPropertyValue(prop->ContainerPtrToValuePtr<int32>(this));
+		const int32 Value = Prop->GetPropertyValue(Prop->ContainerPtrToValuePtr<int32>(this));
 
-		SetNumBalls(value);
+		SetNumBalls(Value);
 
-		if (value < 0 && value > MAX_METABALLS)
+		if (Value < 0 && Value > MAX_METABALLS)
 		{
-			prop->SetPropertyValue(prop->ContainerPtrToValuePtr<int32>(this), m_NumBalls);
+			Prop->SetPropertyValue(Prop->ContainerPtrToValuePtr<int32>(this), m_NumBalls);
 		}
 
-		UE_LOG(YourLog, Warning, TEXT("Num balls value: %d"), m_NumBalls);
+		UE_LOG(MetaballLog, Warning, TEXT("Num balls value: %d"), m_NumBalls);
 
 	}
 
@@ -183,21 +171,21 @@ void AMetaballs::PostEditChangeProperty(FPropertyChangedEvent& e)
 	if (PropertyName == GET_MEMBER_NAME_CHECKED(AMetaballs, m_Scale))
 	{
 
-		FFloatProperty* prop = static_cast<FFloatProperty*>(e.Property);
+		FFloatProperty* Prop = static_cast<FFloatProperty*>(e.Property);
 
-		const float value = prop->GetPropertyValue(prop->ContainerPtrToValuePtr<float>(this));
+		const float Value = Prop->GetPropertyValue(Prop->ContainerPtrToValuePtr<float>(this));
 
-		SetScale(value);
+		SetScale(Value);
 
-		if (value < MIN_SCALE)
+		if (Value < MIN_SCALE)
 		{
-			prop->SetPropertyValue(prop->ContainerPtrToValuePtr<float>(this), m_Scale);
+			Prop->SetPropertyValue(Prop->ContainerPtrToValuePtr<float>(this), m_Scale);
 		}
 
 		MetaBallsBoundBox->SetBoxExtent(FVector(m_Scale, m_Scale, m_Scale), false);
 		MetaBallsBoundBox->UpdateBodySetup();
 
-		UE_LOG(YourLog, Warning, TEXT("Scale value: %f"), m_Scale);
+		UE_LOG(MetaballLog, Warning, TEXT("Scale value: %f"), m_Scale);
 
 	}
 
@@ -206,18 +194,18 @@ void AMetaballs::PostEditChangeProperty(FPropertyChangedEvent& e)
 	if (PropertyName == GET_MEMBER_NAME_CHECKED(AMetaballs, m_GridStep))
 	{
 
-		FIntProperty* prop = static_cast<FIntProperty*>(e.Property);
+		FIntProperty* Prop = static_cast<FIntProperty*>(e.Property);
 
-		const int32 value = prop->GetPropertyValue(prop->ContainerPtrToValuePtr<int32>(this));
+		const int32 Value = Prop->GetPropertyValue(Prop->ContainerPtrToValuePtr<int32>(this));
 
-		SetGridSteps(value);
+		SetGridSteps(Value);
 
-		if (value < MIN_GRID_STEPS && value > MAX_GRID_STEPS)
+		if (Value < MIN_GRID_STEPS && Value > MAX_GRID_STEPS)
 		{
-			prop->SetPropertyValue(prop->ContainerPtrToValuePtr<int32>(this), m_GridStep);
+			Prop->SetPropertyValue(Prop->ContainerPtrToValuePtr<int32>(this), m_GridStep);
 		}
 
-		UE_LOG(YourLog, Warning, TEXT("Grid steps  value: %d"), m_GridStep);
+		UE_LOG(MetaballLog, Warning, TEXT("Grid steps  value: %d"), m_GridStep);
 	}
 
 
@@ -225,18 +213,18 @@ void AMetaballs::PostEditChangeProperty(FPropertyChangedEvent& e)
 	if (PropertyName == GET_MEMBER_NAME_CHECKED(AMetaballs, m_AutoLimitX))
 	{
 
-		FFloatProperty* prop = static_cast<FFloatProperty*>(e.Property);
+		FFloatProperty* Prop = static_cast<FFloatProperty*>(e.Property);
 
-		const float value = prop->GetPropertyValue(prop->ContainerPtrToValuePtr<float>(this));
+		const float Value = Prop->GetPropertyValue(Prop->ContainerPtrToValuePtr<float>(this));
 
-		SetAutoLimitX(value);
+		SetAutoLimitX(Value);
 
-		if (value < MIN_LIMIT && value < MAX_LIMIT)
+		if (Value < MIN_LIMIT && Value < MAX_LIMIT)
 		{
-			prop->SetPropertyValue(prop->ContainerPtrToValuePtr<float>(this), m_AutoLimitX);
+			Prop->SetPropertyValue(Prop->ContainerPtrToValuePtr<float>(this), m_AutoLimitX);
 		}
 
-//		UE_LOG(YourLog, Warning, TEXT("LimitX value: %f"), m_AutoLimitX);
+//		UE_LOG(MetaballLog, Warning, TEXT("LimitX value: %f"), m_AutoLimitX);
 
 	}
 
@@ -244,18 +232,18 @@ void AMetaballs::PostEditChangeProperty(FPropertyChangedEvent& e)
 	if (PropertyName == GET_MEMBER_NAME_CHECKED(AMetaballs, m_AutoLimitY))
 	{
 
-		FFloatProperty* prop = static_cast<FFloatProperty*>(e.Property);
+		FFloatProperty* Prop = static_cast<FFloatProperty*>(e.Property);
 
-		const float value = prop->GetPropertyValue(prop->ContainerPtrToValuePtr<float>(this));
+		const float Value = Prop->GetPropertyValue(Prop->ContainerPtrToValuePtr<float>(this));
 
-		SetAutoLimitY(value);
+		SetAutoLimitY(Value);
 
-		if (value < MIN_LIMIT && value < MAX_LIMIT)
+		if (Value < MIN_LIMIT && Value < MAX_LIMIT)
 		{
-			prop->SetPropertyValue(prop->ContainerPtrToValuePtr<float>(this), m_AutoLimitY);
+			Prop->SetPropertyValue(Prop->ContainerPtrToValuePtr<float>(this), m_AutoLimitY);
 		}
 
-				UE_LOG(YourLog, Warning, TEXT("LimitY value: %f"), m_AutoLimitY);
+				UE_LOG(MetaballLog, Warning, TEXT("LimitY value: %f"), m_AutoLimitY);
 
 	}
 
@@ -264,18 +252,18 @@ void AMetaballs::PostEditChangeProperty(FPropertyChangedEvent& e)
 	if (PropertyName == GET_MEMBER_NAME_CHECKED(AMetaballs, m_AutoLimitZ))
 	{
 
-		FFloatProperty* prop = static_cast<FFloatProperty*>(e.Property);
+		FFloatProperty* Prop = static_cast<FFloatProperty*>(e.Property);
 
-		const float value = prop->GetPropertyValue(prop->ContainerPtrToValuePtr<float>(this));
+		const float Value = Prop->GetPropertyValue(Prop->ContainerPtrToValuePtr<float>(this));
 
-		SetAutoLimitZ(value);
+		SetAutoLimitZ(Value);
 
-		if (value < MIN_LIMIT && value < MAX_LIMIT)
+		if (Value < MIN_LIMIT && Value < MAX_LIMIT)
 		{
-			prop->SetPropertyValue(prop->ContainerPtrToValuePtr<float>(this), m_AutoLimitZ);
+			Prop->SetPropertyValue(Prop->ContainerPtrToValuePtr<float>(this), m_AutoLimitZ);
 		}
 
-		UE_LOG(YourLog, Warning, TEXT("LimitZ value: %f"), m_AutoLimitZ);
+		UE_LOG(MetaballLog, Warning, TEXT("LimitZ value: %f"), m_AutoLimitZ);
 
 	}
 
@@ -292,7 +280,7 @@ void AMetaballs::BeginPlay()
 }
 
 // Called every frame
-void AMetaballs::Tick( float DeltaTime )
+void AMetaballs::Tick(const float DeltaTime)
 {
 	Super::Tick( DeltaTime );
 
@@ -304,7 +292,7 @@ void AMetaballs::Tick( float DeltaTime )
 
 }
 
-void AMetaballs::Update(float dt)
+void AMetaballs::Update(const float dt)
 {
 	//SCOPE_CYCLE_COUNTER(STAT_MetaBallUpdate);
 
@@ -409,9 +397,7 @@ void AMetaballs::Render()
 	int nCase = 0;
 
 	// Clear status grids
-	//memset(m_pnGridPointStatus, 0, (m_nGridSize + 1)*(m_nGridSize + 1)*(m_nGridSize + 1));
 	FMemory::Memset(m_pnGridPointStatus, 0, (m_nGridSize + 1)*(m_nGridSize + 1)*(m_nGridSize + 1));
-	//memset(m_pnGridVoxelStatus, 0, m_nGridSize*m_nGridSize*m_nGridSize);
 	FMemory::Memset(m_pnGridVoxelStatus, 0, m_nGridSize*m_nGridSize*m_nGridSize);
 
 	for (int i = 0; i < m_NumBalls; i++)
@@ -486,7 +472,7 @@ void AMetaballs::ComputeNormal(const FVector Vertex)
 }
 
 
-void AMetaballs::AddNeighborsToList(int nCase, int x, int y, int z)
+void AMetaballs::AddNeighborsToList(const int nCase, const int x, const int y, const int z)
 {
 	//SCOPE_CYCLE_COUNTER(STAT_MetaBallAddNeighborToList);
 
@@ -522,7 +508,6 @@ void AMetaballs::AddNeighbor(int x, int y, int z)
 	{
 		m_nMaxOpenVoxels *= 2;
 		int *pTmp = new int[m_nMaxOpenVoxels * 3];
-		//memcpy(pTmp, m_pOpenVoxels, m_nNumOpenVoxels * 3 * sizeof(int));
 		FMemory::Memcpy(pTmp, m_pOpenVoxels, m_nNumOpenVoxels * 3 * sizeof(int));
 		delete[] m_pOpenVoxels;
 		m_pOpenVoxels = pTmp;
@@ -626,7 +611,6 @@ int AMetaballs::ComputeGridVoxel(int x, int y, int z)
 		
 	int i = 0;
 	unsigned short EdgeIndices[12];
-	//memset(EdgeIndices, 0xFF, 12 * sizeof(unsigned short));
 	FMemory::Memset(EdgeIndices, 0xFF, 12 * sizeof(unsigned short));
 
 	while (true)
@@ -792,20 +776,13 @@ void AMetaballs::SetBallTransform(const int32 Index, const FVector Transform)
 
 void AMetaballs::SetNumBalls(const int Value)
 {
-	m_NumBalls = FMath::Clamp<int32>(Value, 0, MAX_METABALLS);;
+	m_NumBalls = FMath::Clamp<int32>(Value, 0, MAX_METABALLS);
 }
 
 
-void AMetaballs::SetScale(float Value)
+void AMetaballs::SetScale(const float Value)
 {
-	float ret = Value;
-
-	if (ret < MIN_SCALE)
-	{
-		ret = MIN_SCALE;
-	}
-
-	m_Scale = ret;
+	m_Scale = FMath::Max<float>(Value, MIN_SCALE);
 }
 
 
