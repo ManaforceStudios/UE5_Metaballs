@@ -20,14 +20,13 @@
 #include "ProceduralMeshComponent.h"
 #include "Components/BoxComponent.h"
 #include "Materials/MaterialInterface.h"
-#include "Components/BillboardComponent.h"
 #include "Metaballs.generated.h"
 
 
 
 
 DECLARE_STATS_GROUP(TEXT("MetaBall"), STATGROUP_MetaBall, STATCAT_Advanced);
-DECLARE_LOG_CATEGORY_EXTERN(YourLog, Log, All);
+DECLARE_LOG_CATEGORY_EXTERN(MetaballLog, Log, All);
 
 struct SMetaBall
 {
@@ -142,11 +141,6 @@ public:
 	UPROPERTY(VisibleDefaultsOnly)
 	UBoxComponent* MetaBallsBoundBox;
 
-//	UPROPERTY(VisibleAnywhere, Category = "MyComponents")
-//	USceneComponent* m_SceneComponent;
-
-	UPROPERTY()
-	UBillboardComponent* m_SpriteComponent;
 
 	void  Update(float fDeltaTime);
 	void  Render();
