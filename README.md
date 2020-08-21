@@ -24,3 +24,8 @@ Installation:
 
 
 Please, make sure that completely installed Microsoft Visual Studio 2019 and Unreal Engine 4.25
+
+
+Original Author: Andrey Harchenko
+
+Update to 4.25 and optimizations: iliags
