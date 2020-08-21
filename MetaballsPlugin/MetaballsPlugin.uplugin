@@ -1,0 +1,25 @@
+{
+  "FileVersion": 3,
+  "FriendlyName": "Metaballs FX Plugin",
+  "Version": 1,
+  "VersionName": "1.0",
+  "Description": "Provides the code for the Metaballs fx",
+  "Category": "Metaballs",
+  "CreatedBy": "Andrey Harchenko",
+  "CreatedByURL": "",
+  "CanContainContent": "true",
+  "EnabledByDefault": true,
+
+  "Modules": [
+    {
+      "Name": "MetaballsPlugin",
+      "Type": "Runtime"
+    }
+  ],
+  "Plugins": [
+    {
+      "Name": "ProceduralMeshComponent",
+      "Enabled": true
+    }
+  ]
+}
