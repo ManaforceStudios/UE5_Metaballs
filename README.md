@@ -23,7 +23,7 @@ Installation:
 
 
 
-Please, make sure that completely installed Microsoft Visual Studio 2019 and Unreal Engine 4.25
+Please make sure that Microsoft Visual Studio 2019 is installed and Unreal Engine is at 4.25 or later.
 
 
 Original Author: Andrey Harchenko
