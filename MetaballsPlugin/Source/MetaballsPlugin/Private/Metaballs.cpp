@@ -55,7 +55,6 @@ DECLARE_CYCLE_STAT(TEXT("MetaBall - AddNeighbor"), STAT_MetaBallAddNeighbor, STA
 DECLARE_CYCLE_STAT(TEXT("MetaBall - ComputeEnergy"), STAT_MetaBallComputeEnergy, STATGROUP_MetaBall);
 DECLARE_CYCLE_STAT(TEXT("MetaBall - ComputeGridpointEnergy"), STAT_MetaBallComputeGridpointEnergy, STATGROUP_MetaBall);
 DECLARE_CYCLE_STAT(TEXT("MetaBall - ComputeGridVoxel"), STAT_MetaBallComputeGridVoxel, STATGROUP_MetaBall);
-DECLARE_CYCLE_STAT(TEXT("MetaBall - SetBallTransform"), STAT_MetaBallSetBallTransform, STATGROUP_MetaBall);
 
 
 // Sets default values
@@ -294,7 +293,9 @@ void AMetaballs::Tick(const float DeltaTime)
 
 void AMetaballs::Update(const float dt)
 {
-	//SCOPE_CYCLE_COUNTER(STAT_MetaBallUpdate);
+#if METABALLS_PROFILE
+	SCOPE_CYCLE_COUNTER(STAT_MetaBallUpdate);
+#endif
 
 	if (!m_automode)
 		return;
@@ -381,8 +382,9 @@ void AMetaballs::Update(const float dt)
 
 void AMetaballs::Render()
 {
-
-	//SCOPE_CYCLE_COUNTER(STAT_MetaBallRender);
+#if METABALLS_PROFILE
+	SCOPE_CYCLE_COUNTER(STAT_MetaBallRender);
+#endif
 	
 	m_vertices.Empty();
 	m_Triangles.Empty();
@@ -449,7 +451,10 @@ void AMetaballs::Render()
 
 void AMetaballs::ComputeNormal(const FVector Vertex)
 {
-	//SCOPE_CYCLE_COUNTER(STAT_MetaBallComputeNormal);
+#if METABALLS_PROFILE
+	SCOPE_CYCLE_COUNTER(STAT_MetaBallComputeNormal);
+#endif
+	
 	FVector NVector = FVector::ZeroVector;
 
 	for (int i = 0; i < m_NumBalls; i++)
@@ -474,8 +479,10 @@ void AMetaballs::ComputeNormal(const FVector Vertex)
 
 void AMetaballs::AddNeighborsToList(const int nCase, const int x, const int y, const int z)
 {
-	//SCOPE_CYCLE_COUNTER(STAT_MetaBallAddNeighborToList);
-
+#if METABALLS_PROFILE
+	SCOPE_CYCLE_COUNTER(STAT_MetaBallAddNeighborToList);
+#endif
+	
 	if (CMarchingCubes::m_CubeNeighbors[nCase] & (1 << 0))
 		AddNeighbor(x + 1, y, z);
 
@@ -496,9 +503,11 @@ void AMetaballs::AddNeighborsToList(const int nCase, const int x, const int y, c
 }
 
 
-void AMetaballs::AddNeighbor(int x, int y, int z)
+void AMetaballs::AddNeighbor(const int x, const int y, const int z)
 {
-	//SCOPE_CYCLE_COUNTER(STAT_MetaBallAddNeighbor);
+#if METABALLS_PROFILE
+	SCOPE_CYCLE_COUNTER(STAT_MetaBallAddNeighbor);
+#endif
 
 	if (IsGridVoxelComputed(x, y, z) || IsGridVoxelInList(x, y, z))
 		return;
@@ -524,7 +533,9 @@ void AMetaballs::AddNeighbor(int x, int y, int z)
 
 float AMetaballs::ComputeEnergy(const float x, const float y, const float z) const
 {
-	//SCOPE_CYCLE_COUNTER(STAT_MetaBallComputeEnergy);
+#if METABALLS_PROFILE
+	SCOPE_CYCLE_COUNTER(STAT_MetaBallComputeEnergy);
+#endif
 
 	float fEnergy = 0;
 
@@ -549,7 +560,9 @@ float AMetaballs::ComputeEnergy(const float x, const float y, const float z) con
 
 float AMetaballs::ComputeGridPointEnergy(const int x, const int y, const int z) const
 {
-	//SCOPE_CYCLE_COUNTER(STAT_MetaBallComputeGridpointEnergy);
+#if METABALLS_PROFILE
+	SCOPE_CYCLE_COUNTER(STAT_MetaBallComputeGridpointEnergy);
+#endif
 	
 	const int Index = GetIndex(x, y, z, m_nGridSize);
 	
@@ -580,7 +593,9 @@ float AMetaballs::ComputeGridPointEnergy(const int x, const int y, const int z) 
 
 int AMetaballs::ComputeGridVoxel(int x, int y, int z)
 {
-	//SCOPE_CYCLE_COUNTER(STAT_MetaBallComputeGridVoxel);
+#if METABALLS_PROFILE
+	SCOPE_CYCLE_COUNTER(STAT_MetaBallComputeGridVoxel);
+#endif
 
 	float b[8];
 
@@ -768,7 +783,6 @@ void AMetaballs::SetBallTransform(const int32 Index, const FVector Transform)
 		return;
 	}
 	
-	//SCOPE_CYCLE_COUNTER(STAT_MetaBallSetBallTransform);
 	m_Balls[Index].p.Y = Transform.X;
 	m_Balls[Index].p.X = Transform.Y;
 	m_Balls[Index].p.Z = Transform.Z;
