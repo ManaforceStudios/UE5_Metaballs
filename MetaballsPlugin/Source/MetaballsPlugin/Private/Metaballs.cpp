@@ -309,18 +309,18 @@ void AMetaballs::Update(const float dt)
 		m_Balls[i].t -= dt;
 		if (m_Balls[i].t < 0)
 		{
-			m_Balls[i].t = static_cast<float>(rand()) / RAND_MAX;
+			m_Balls[i].t = FMath::FRand();
 
-			m_Balls[i].a.X = m_AutoLimitY * (static_cast<float>(rand()) / RAND_MAX * 2 - 1);
-			m_Balls[i].a.Y = m_AutoLimitX * (static_cast<float>(rand()) / RAND_MAX * 2 - 1);
-			m_Balls[i].a.Z = m_AutoLimitZ * (static_cast<float>(rand()) / RAND_MAX * 2 - 1);
+			m_Balls[i].a.X = m_AutoLimitY * (FMath::FRand() * 2 - 1);
+			m_Balls[i].a.Y = m_AutoLimitX * (FMath::FRand() * 2 - 1);
+			m_Balls[i].a.Z = m_AutoLimitZ * (FMath::FRand() * 2 - 1);
 
 		}
 
 		float x = m_Balls[i].a.X - m_Balls[i].p.X;
 		float y = m_Balls[i].a.Y - m_Balls[i].p.Y;
 		float z = m_Balls[i].a.Z - m_Balls[i].p.Z;
-		float fDist = 1 / sqrtf(x*x + y*y + z*z);
+		float fDist = 1 / FMath::Sqrt(x*x + y*y + z*z);
 
 		x *= fDist;
 		y *= fDist;
@@ -336,7 +336,7 @@ void AMetaballs::Update(const float dt)
 
 		if (fDist > 0.040f)
 		{
-			fDist = 1 / sqrtf(fDist);
+			fDist = 1 / FMath::Sqrt(fDist);
 			m_Balls[i].v.X = 0.20f*m_Balls[i].v.X * fDist;
 			m_Balls[i].v.Y = 0.20f*m_Balls[i].v.Y * fDist;
 			m_Balls[i].v.Z = 0.20f*m_Balls[i].v.Z * fDist;
@@ -738,39 +738,20 @@ inline FVector AMetaballs::ConvertGridPointToWorldCoordinate(const FVector& Vect
 
 void AMetaballs::InitBalls()
 {
-	const FDateTime curTime;
-	srand(curTime.GetTicks());
+	const FRandomStream InitStream(FDateTime::Now().GetTicks());
 
 	for (int i = 0; i < MAX_METABALLS; i++)
 	{
-		float p0 = 0.0f;
-		float p1 = 0.0f;
-		float p2 = 0.0f;
-		float v0 = 0.0f;
-		float v1 = 0.0f;
-		float v2 = 0.0f;
-
-		if (m_randomseed)
-		{
-			p0 = m_AutoLimitY * (static_cast<float>(rand()) / RAND_MAX * 2 - 1);
-			p1 = m_AutoLimitX * (static_cast<float>(rand()) / RAND_MAX * 2 - 1);
-			p2 = m_AutoLimitZ * (static_cast<float>(rand()) / RAND_MAX * 2 - 1);
-
-			v0 = (static_cast<float>(rand()) / RAND_MAX * 2 - 1) / 2;
-			v1 = (static_cast<float>(rand()) / RAND_MAX * 2 - 1) / 2;
-			v2 = (static_cast<float>(rand()) / RAND_MAX * 2 - 1) / 2;
-		}
-
-		m_Balls[i].p.X = p0;
-		m_Balls[i].p.Y = p1;
-		m_Balls[i].p.Z = p2;
-		m_Balls[i].v.X = v0;
-		m_Balls[i].v.Y = v1;
-		m_Balls[i].v.Z = v2;
-		m_Balls[i].a.X = m_AutoLimitY * (static_cast<float>(rand()) / RAND_MAX * 2 - 1);
-		m_Balls[i].a.Y = m_AutoLimitX * (static_cast<float>(rand()) / RAND_MAX * 2 - 1);
-		m_Balls[i].a.Z = m_AutoLimitZ * (static_cast<float>(rand()) / RAND_MAX * 2 - 1);
-		m_Balls[i].t = static_cast<float>(rand()) / RAND_MAX;
+		m_Balls[i].p.X = m_randomseed ? m_AutoLimitY * (InitStream.FRand() * 2 - 1) : 0.0f;
+		m_Balls[i].p.Y = m_randomseed ? m_AutoLimitX * (InitStream.FRand() * 2 - 1) : 0.0f;
+		m_Balls[i].p.Z = m_randomseed ? m_AutoLimitZ * (InitStream.FRand() * 2 - 1) : 0.0f;
+		m_Balls[i].v.X = m_randomseed ? (InitStream.FRand() * 2 - 1) / 2 : 0.0f;
+		m_Balls[i].v.Y = m_randomseed ? (InitStream.FRand() * 2 - 1) / 2 : 0.0f;
+		m_Balls[i].v.Z = m_randomseed ? (InitStream.FRand() * 2 - 1) / 2 : 0.0f;
+		m_Balls[i].a.X = m_AutoLimitY * (InitStream.FRand() * 2 - 1);
+		m_Balls[i].a.Y = m_AutoLimitX * (InitStream.FRand() * 2 - 1);
+		m_Balls[i].a.Z = m_AutoLimitZ * (InitStream.FRand() * 2 - 1);
+		m_Balls[i].t = InitStream.FRand();
 		m_Balls[i].m = 1;
 	}
 }
@@ -793,17 +774,14 @@ void AMetaballs::SetNumBalls(const int Value)
 	m_NumBalls = FMath::Clamp<int32>(Value, 0, MAX_METABALLS);
 }
 
-
 void AMetaballs::SetScale(const float Value)
 {
 	m_Scale = FMath::Max<float>(Value, MIN_SCALE);
 }
 
-
 void AMetaballs::SetGridSteps(const int32 Value)
 {
 	m_GridStep = FMath::Clamp<int32>(Value, MIN_GRID_STEPS, MAX_GRID_STEPS);
-
 	SetGridSize(m_GridStep);
 }
 
