@@ -55,6 +55,7 @@ DECLARE_CYCLE_STAT(TEXT("MetaBall - AddNeighbor"), STAT_MetaBallAddNeighbor, STA
 DECLARE_CYCLE_STAT(TEXT("MetaBall - ComputeEnergy"), STAT_MetaBallComputeEnergy, STATGROUP_MetaBall);
 DECLARE_CYCLE_STAT(TEXT("MetaBall - ComputeGridpointEnergy"), STAT_MetaBallComputeGridpointEnergy, STATGROUP_MetaBall);
 DECLARE_CYCLE_STAT(TEXT("MetaBall - ComputeGridVoxel"), STAT_MetaBallComputeGridVoxel, STATGROUP_MetaBall);
+DECLARE_CYCLE_STAT(TEXT("MetaBall - ComputeGridVoxel For Loop"), STAT_MetaBallComputeGridVoxelForLoop, STATGROUP_MetaBall);
 
 
 // Sets default values
@@ -97,8 +98,6 @@ AMetaballs::AMetaballs(const FObjectInitializer& ObjectInitializer) : Super(Obje
 	m_pfGridEnergy = nullptr;
 	m_pnGridPointStatus = nullptr;
 	m_pnGridVoxelStatus = nullptr;
-
-
 
 }
 
@@ -279,13 +278,13 @@ void AMetaballs::BeginPlay()
 }
 
 // Called every frame
-void AMetaballs::Tick(const float DeltaTime)
+void AMetaballs::Tick(const float DeltaSeconds)
 {
-	Super::Tick( DeltaTime );
+	Super::Tick(DeltaSeconds);
 
 	if (m_NumBalls > 0)
 	{
-		Update(DeltaTime);
+		Update(DeltaSeconds);
 		Render();
 	}
 
@@ -300,11 +299,10 @@ void AMetaballs::Update(const float dt)
 	if (!m_automode)
 		return;
 
+
 	for (int i = 0; i < m_NumBalls; i++)
 	{
-		m_Balls[i].p.X += dt*m_Balls[i].v.X;
-		m_Balls[i].p.Y += dt*m_Balls[i].v.Y;
-		m_Balls[i].p.Z += dt*m_Balls[i].v.Z;
+		m_Balls[i].p += dt * m_Balls[i].v;
 
 		m_Balls[i].t -= dt;
 		if (m_Balls[i].t < 0)
@@ -317,29 +315,19 @@ void AMetaballs::Update(const float dt)
 
 		}
 
-		float x = m_Balls[i].a.X - m_Balls[i].p.X;
-		float y = m_Balls[i].a.Y - m_Balls[i].p.Y;
-		float z = m_Balls[i].a.Z - m_Balls[i].p.Z;
-		float fDist = 1 / FMath::Sqrt(x*x + y*y + z*z);
+		FVector DistanceVector(m_Balls[i].a - m_Balls[i].p);
+		
+		float fDist = 1 / FMath::Sqrt(DistanceVector.SizeSquared());
 
-		x *= fDist;
-		y *= fDist;
-		z *= fDist;
+		DistanceVector *= fDist;
+		m_Balls[i].v += 0.1f * DistanceVector * dt;
 
-		m_Balls[i].v.X += 0.1f*x*dt;
-		m_Balls[i].v.Y += 0.1f*y*dt;
-		m_Balls[i].v.Z += 0.1f*z*dt;
-
-		fDist = m_Balls[i].v.X * m_Balls[i].v.X +
-			m_Balls[i].v.Y * m_Balls[i].v.Y +
-			m_Balls[i].v.Z * m_Balls[i].v.Z;
+		fDist = m_Balls[i].v.SizeSquared();
 
 		if (fDist > 0.040f)
 		{
 			fDist = 1 / FMath::Sqrt(fDist);
-			m_Balls[i].v.X = 0.20f*m_Balls[i].v.X * fDist;
-			m_Balls[i].v.Y = 0.20f*m_Balls[i].v.Y * fDist;
-			m_Balls[i].v.Z = 0.20f*m_Balls[i].v.Z * fDist;
+			m_Balls[i].v = 0.20f * m_Balls[i].v * fDist;
 		}
 
 		if (m_Balls[i].p.X < -m_AutoLimitY + m_fVoxelSize)
@@ -399,8 +387,8 @@ void AMetaballs::Render()
 	int nCase = 0;
 
 	// Clear status grids
-	FMemory::Memset(m_pnGridPointStatus, 0, (m_nGridSize + 1)*(m_nGridSize + 1)*(m_nGridSize + 1));
-	FMemory::Memset(m_pnGridVoxelStatus, 0, m_nGridSize*m_nGridSize*m_nGridSize);
+	FMemory::Memset(m_pnGridPointStatus, 0, FMath::Pow(m_nGridSize+1, 3));
+	FMemory::Memset(m_pnGridVoxelStatus, 0, FMath::Pow(m_nGridSize, 3));
 
 	for (int i = 0; i < m_NumBalls; i++)
 	{
@@ -449,31 +437,27 @@ void AMetaballs::Render()
 }
 
 
-void AMetaballs::ComputeNormal(const FVector Vertex)
+void AMetaballs::ComputeNormal(const FVector& Vertex)
 {
 #if METABALLS_PROFILE
 	SCOPE_CYCLE_COUNTER(STAT_MetaBallComputeNormal);
 #endif
 	
-	FVector NVector = FVector::ZeroVector;
+	FVector NVector(FVector::ZeroVector);
 
 	for (int i = 0; i < m_NumBalls; i++)
 	{
-		FVector CalcVector = FVector(
+		FVector CalcVector(FVector(
 		Vertex.X - m_Balls[i].p.Z,
 		Vertex.Y - m_Balls[i].p.Y,
-		Vertex.Z - m_Balls[i].p.X);
+		Vertex.Z - m_Balls[i].p.X));
 
-		//const float SquareDistVector = FVector::DistSquared(CalcVector, CalcVector * -1);
-		const float SquareDistVector = FMath::Pow(FMath::Square(CalcVector.X) + FMath::Square(CalcVector.Y) + FMath::Square(CalcVector.Z), 2);
-		
-		
-		NVector = NVector + 2 * m_Balls[i].m * CalcVector / (SquareDistVector);
+		NVector += 2 * m_Balls[i].m * CalcVector / FMath::Square<float>(CalcVector.SizeSquared());
 	}
 
 	NVector.Normalize();
 	m_normals.Add(NVector);
-	m_UV0.Add(FVector2D(NVector.X, NVector.Y));
+	m_UV0.Add(FVector2D(NVector));
 }
 
 
@@ -543,14 +527,10 @@ float AMetaballs::ComputeEnergy(const float x, const float y, const float z) con
 	{
 		// The formula for the energy is 
 		// 
-		//   e += mass/distance^2 
+		//   e += mass/distance^2
 
-		float fSqDist = (m_Balls[i].p.X - x) * (m_Balls[i].p.X - x) +
-			(m_Balls[i].p.Y - y) * (m_Balls[i].p.Y - y) +
-			(m_Balls[i].p.Z - z) * (m_Balls[i].p.Z - z);
-
-		if (fSqDist < 0.0001f) fSqDist = 0.0001f;
-
+		const float fSqDist = FMath::Max<float>(FVector::DistSquared(m_Balls[i].p, FVector(x, y, z)), 0.0001f);
+		
 		fEnergy += m_Balls[i].m / fSqDist;
 	}
 
@@ -579,11 +559,10 @@ float AMetaballs::ComputeGridPointEnergy(const int x, const int y, const int z) 
 		return 0;
 	}
 
-	const float fx = ConvertGridPointToWorldCoordinate(x);
-	const float fy = ConvertGridPointToWorldCoordinate(y);
-	const float fz = ConvertGridPointToWorldCoordinate(z);
-
-	m_pfGridEnergy[Index] = ComputeEnergy(fx, fy, fz);
+	m_pfGridEnergy[Index] = ComputeEnergy(
+		ConvertGridPointToWorldCoordinate(x),
+		ConvertGridPointToWorldCoordinate(y),
+		ConvertGridPointToWorldCoordinate(z));
 
 	SetGridPointComputed(x, y, z);
 
@@ -619,10 +598,10 @@ int AMetaballs::ComputeGridVoxel(int x, int y, int z)
 	c |= b[7] > m_fLevel ? (1 << 7) : 0;
 
 	
-	const FVector PyramidVector = FVector(
+	const FVector PyramidVector(FVector(
 		ConvertGridPointToWorldCoordinate(x),
 		ConvertGridPointToWorldCoordinate(y),
-		ConvertGridPointToWorldCoordinate(z));
+		ConvertGridPointToWorldCoordinate(z)));
 		
 	int i = 0;
 	unsigned short EdgeIndices[12];
@@ -636,6 +615,9 @@ int AMetaballs::ComputeGridVoxel(int x, int y, int z)
 
 		if (EdgeIndices[nEdge] == 0xFFFF)
 		{
+			#if METABALLS_PROFILE
+						SCOPE_CYCLE_COUNTER(STAT_MetaBallComputeGridVoxelForLoop);
+			#endif
 			EdgeIndices[nEdge] = m_nNumVertices;
 
 			// Compute the vertex by interpolating between the two points
@@ -644,13 +626,13 @@ int AMetaballs::ComputeGridVoxel(int x, int y, int z)
 
 			const float t = (m_fLevel - b[nIndex0]) / (b[nIndex1] - b[nIndex0]);
 
-			FVector CubesVector = FVector(
+			FVector CubesVector(FVector(
 			CMarchingCubes::m_CubeVertices[nIndex0][0] * (1 - t) + CMarchingCubes::m_CubeVertices[nIndex1][0] * t,
 			CMarchingCubes::m_CubeVertices[nIndex0][1] * (1 - t) + CMarchingCubes::m_CubeVertices[nIndex1][1] * t,
-			CMarchingCubes::m_CubeVertices[nIndex0][2] * (1 - t) + CMarchingCubes::m_CubeVertices[nIndex1][2] * t);
+			CMarchingCubes::m_CubeVertices[nIndex0][2] * (1 - t) + CMarchingCubes::m_CubeVertices[nIndex1][2] * t));
 
-			FVector EdgeVector = PyramidVector + CubesVector * m_fVoxelSize;
-			EdgeVector = FVector(EdgeVector.Z, EdgeVector.Y, EdgeVector.X);
+			FVector EdgeVector(PyramidVector + CubesVector * m_fVoxelSize);
+			EdgeVector = FVector(EdgeVector.Z, EdgeVector.Y, EdgeVector.X);			
 
 			ComputeNormal(EdgeVector);
 
@@ -696,9 +678,9 @@ void AMetaballs::SetGridSize(const int nSize)
 	m_fVoxelSize = 2 / static_cast<float>(nSize);
 	m_nGridSize = nSize;
 
-	m_pfGridEnergy = new float[(nSize + 1)*(nSize + 1)*(nSize + 1)];
-	m_pnGridPointStatus = new char[(nSize + 1)*(nSize + 1)*(nSize + 1)];
-	m_pnGridVoxelStatus = new char[nSize*nSize*nSize];
+	m_pfGridEnergy = new float[FMath::Pow(nSize+1, 3)];
+	m_pnGridPointStatus = new char[FMath::Pow(nSize+1, 3)];
+	m_pnGridVoxelStatus = new char[FMath::Pow(nSize, 3)];
 }
 
 inline bool AMetaballs::IsGridPointComputed(const int x, const int y, const int z) const
@@ -757,16 +739,14 @@ void AMetaballs::InitBalls()
 }
 
 
-void AMetaballs::SetBallTransform(const int32 Index, const FVector Transform)
+void AMetaballs::SetBallTransform(const int32 Index, const FVector& Transform)
 {
 	if (Index > m_NumBalls - 1)
 	{
 		return;
 	}
-	
-	m_Balls[Index].p.Y = Transform.X;
-	m_Balls[Index].p.X = Transform.Y;
-	m_Balls[Index].p.Z = Transform.Z;
+
+	m_Balls[Index].p = FVector(Transform.Y, Transform.X, Transform.Z);
 }
 
 void AMetaballs::SetNumBalls(const int Value)

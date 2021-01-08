@@ -76,7 +76,7 @@ public:
 #endif
 
 	UFUNCTION(BlueprintCallable, Category = "Metaballs")
-	void SetBallTransform(int32 Index, FVector Transform);
+	void SetBallTransform(int32 Index, const FVector& Transform);
 
 	UFUNCTION(BlueprintCallable, Category = "Metaballs")
 	void SetNumBalls(int32 Value);
@@ -138,6 +138,7 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Settings, meta = (DisplayName = "Material"))
 	UMaterialInterface* m_Material;
 
+
 	UPROPERTY(VisibleDefaultsOnly)
 	UBoxComponent* MetaBallsBoundBox;
 
@@ -153,7 +154,7 @@ protected:
 	float CheckLimit(float Value) const;
 
 	float ComputeEnergy(float x, float y, float z) const;
-	void  ComputeNormal(FVector Vertex);
+	void  ComputeNormal(const FVector& Vertex);
 
 	float ComputeGridPointEnergy(int x, int y, int z) const;
 	int   ComputeGridVoxel(int x, int y, int z);
