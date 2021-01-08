@@ -1,4 +1,4 @@
-Metaballs FX for Unreal Engine 4.25:
+Metaballs FX for Unreal Engine 4.25+:
 
 https://www.youtube.com/watch?v=Z0xbnEMbMxw
 
@@ -28,4 +28,4 @@ Please make sure that Microsoft Visual Studio 2019 is installed and Unreal Engin
 
 Original Author: Andrey Harchenko
 
-Update to 4.25 and optimizations: iliags
+Updates and optimizations: iliags
