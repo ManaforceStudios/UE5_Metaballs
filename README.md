@@ -24,4 +24,6 @@ Original Author: Andrey Harchenko
 
 Ported to UE5 by Manaforce Studios
 
+Example Project by JarenNull
+
 Updates and optimizations: iliags
