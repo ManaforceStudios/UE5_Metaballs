@@ -8,7 +8,7 @@ Installation:
 
 2) Create Blueprint with parent class Metaballs:
 
-![image](https://cloud.githubusercontent.com/assets/9151008/13838301/e6cfb902-ec23-11e5-9de8-7aa44092e00d.png)
+![image](https://user-images.githubusercontent.com/80787087/138180951-a5d5d937-34a9-44ff-8563-52f9c4881aa1.png)
 
 3) Add Blueprint to the Level map
 
