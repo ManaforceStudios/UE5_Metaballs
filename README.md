@@ -1,4 +1,4 @@
-Metaballs FX for Unreal Engine 4.25+:
+Metaballs FX for Unreal Engine 5.0 Early Access
 
 https://www.youtube.com/watch?v=Z0xbnEMbMxw
 
