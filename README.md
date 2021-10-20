@@ -16,7 +16,7 @@ Installation:
 
 5) You can adjust the parameters for Metaballs via Blueprints:
 
-![image](https://cloud.githubusercontent.com/assets/9151008/13838346/46b6a70e-ec24-11e5-9898-07a615118e16.png)
+![image](https://user-images.githubusercontent.com/80787087/138181167-fafcbd3a-66b9-47d7-8248-c97c8010420f.png)
 
 Please make sure that Microsoft Visual Studio 2019 is installed and Unreal Engine is at 4.25 or later.
 
