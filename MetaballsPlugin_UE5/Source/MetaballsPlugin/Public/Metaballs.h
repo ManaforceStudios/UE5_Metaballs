@@ -139,7 +139,7 @@ public:
 	UMaterialInterface* m_Material;
 
 
-	UPROPERTY(VisibleDefaultsOnly)
+	UPROPERTY(VisibleDefaultsOnly, BlueprintReadOnly)
 	UBoxComponent* MetaBallsBoundBox;
 
 
